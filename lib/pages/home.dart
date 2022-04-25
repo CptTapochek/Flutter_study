@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class Home extends StatefulWidget {
   const Home({required Key? key}) : super(key: key);
@@ -11,8 +13,16 @@ class _HomeState extends State<Home> {
 
   String userTask = '';
   List taskList = [];
+
+  void initFireBase() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await Firebase.initializeApp();
+  }
+
+  @override
   void initState() {
     super.initState();
+    initFireBase();
     taskList.addAll(['Refactoring cod', 'check bug report', 'fix bugs']);
   }
 
@@ -54,29 +64,30 @@ class _HomeState extends State<Home> {
           )
         ],
       ),
-      body: ListView.builder(
-        itemCount: taskList.length,
-        itemBuilder: (BuildContext context, int index){
-          return Dismissible(
-            key: Key(taskList[index]),
-            child: Card(
-                child: ListTile(
-                  title: Text(taskList[index]),
-                  trailing: IconButton(icon: Icon(Icons.delete, color: Colors.deepOrangeAccent,), onPressed: () {
-                    setState(() {
-                      taskList.removeAt(index);
-                    });
-                  },),
-                )
-            ),
-            onDismissed: (direction){
-              /*if(direction == DismissDirection.end)*/
-              setState(() {
-                taskList.removeAt(index);
-              });
-            },
+      body: StreamBuilder(
+        stream: FirebaseFirestore.instance.collection('items').snapshots(),
+        builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot){
+          return ListView.builder(
+              itemCount: snapshot.data!.docs.length,
+              itemBuilder: (BuildContext context, int index){
+                return Dismissible(
+                  key: Key(snapshot.data!.docs[index].id),
+                  child: Card(
+                      child: ListTile(
+                        title: Text(snapshot.data!.docs[index].get('item')),
+                        trailing: IconButton(icon: Icon(Icons.delete, color: Colors.deepOrangeAccent,), onPressed: () {
+                          FirebaseFirestore.instance.collection('items').doc(snapshot.data!.docs[index].id).delete();
+                        },),
+                      )
+                  ),
+                  onDismissed: (direction){
+                    FirebaseFirestore.instance.collection('items').doc(snapshot.data!.docs[index].id).delete();
+                  },
+                );
+              }
           );
-        }
+        },
+
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.deepOrangeAccent,
@@ -91,9 +102,7 @@ class _HomeState extends State<Home> {
               ),
               actions: [
                 ElevatedButton(onPressed: (){
-                  setState(() {
-                    taskList.add(userTask);
-                  });
+                  FirebaseFirestore.instance.collection('items').add({'item': userTask});
                   Navigator.of(context).pop();
                 }, child: Text('Add'))
               ],
